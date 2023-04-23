@@ -9,34 +9,46 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(cmdstanr)
+library(here)
+library(brms)
+library(tidybayes)
+library(bayesplot)
 ```
 
 ## R Markdown
 
 ```{r}
 source(here::here("agent.R"))
-b0a = -2    #intercept learning rate 
-b1a = 0.5     #percept influence on learning rate
-b0p = -1      #intercept percept
-b1p = -0.3    #expectation effect on perception
-b2p = 1.3     #stimulus effect on perception
-kappa = 20    #precision on perception
+b0a = -0.5    #intercept learning rate 
+b1a = 1     #percept influence on learning rate
+
+b0p = -1.5      #intercept percept
+b1p = 0.8    #expectation effect on perception
+b2p = 2     #stimulus effect on perception
+
+kappa = 50    #precision on perception
+beta = 10
 
 
-outcome = c(rbinom(trials/2,1,0.8),rbinom(trials/2,1,0.2))
-stim = rbinom(50,1,0.5)
-trials = 50
+reals = data.frame(b0a = b0a, b1a = b1a, b0p = b0p, b1p = b1p, b2p = b2p, beta = beta, kappa = kappa) %>% pivot_longer(everything())
+trials = 160
+
+
+outcome = c(rbinom(trials/4,1,0.8),rbinom(trials/4,1,0.2),rbinom(trials/4,1,0.8),rbinom(trials/4,1,0.2))
+stim = rbinom(trials,1,0.5)
 
 df = agent(b0a = b0a,
       b1a = b1a,
       b0p = b0p,
       b1p = b1p,
       b2p = b2p,
+      b3p = b3p,
       kappa = kappa,
+      beta = beta,
       outcome = outcome,
       stim = stim,
       trials = trials)
-df
 
 df %>% ggplot(aes(x = trials))+geom_line(aes(y = expectation))+
   geom_point(aes(y = outcome, col = as.factor(stim)))+
@@ -45,9 +57,124 @@ df %>% ggplot(aes(x = trials))+geom_line(aes(y = expectation))+
   geom_line(aes(y = alpha), col = "orange")
 
 
+mod = cmdstan_model(here::here("model.stan"))
+
+df = df[-1,]
+
+data = list(N = nrow(df), percept = df$percept, predict = df$prediction, stim = df$stim, outcome = df$outcome)
+
+
+fit <- mod$sample(
+  data = data,
+  chains = 4, 
+  parallel_chains = 4,
+  refresh = 500,
+  adapt_delta = 0.90,
+  max_treedepth = 10
+)
+
+#ff = fit$summary()
+draws = as_draws_df(fit$draws())
+
+draws %>% ggplot(aes(x = b0a, y = b1a))+geom_point()
+
+#ff %>% filter(str_detect(variable, "alpha") ) %>% mutate(trial = 1:nrow(.))%>% ggplot()+geom_line(aes(x = trial, y=mean))
+
+priors = draws %>% select(starts_with("prior")) %>% pivot_longer(everything()) %>% mutate(prior = 1, name = gsub("prior_", "",name))
+
+
+posterior = draws %>% select(c("b0a","b1a","b0p","b1p","b2p","beta", "kappa")) %>% pivot_longer(everything()) %>% mutate(prior = 0)
+  
+  
+rbind(priors,posterior) %>% ggplot(aes(x = value))+geom_density(aes(col = as.factor(prior)))+facet_wrap(~name, scales = "free")+theme_classic()+
+  geom_vline(data = reals, aes(xintercept = value))
+
+
+post = fit$summary() %>% filter(str_detect(variable, "expectation")| str_detect(variable, "mupercept") | str_detect(variable, "prob") | str_detect(variable, "alpha")) %>% mutate(trial = rep(1:(trials-1),4), variable = gsub("\\[.*", "", variable)) %>% pivot_wider(id_cols = trial, names_from = variable, values_from = mean)
+
+post$stim = df$stim
+
+post %>% ggplot(aes(x = trial))+geom_line(aes(y = expectation))+
+  geom_point(aes(y = prob, col = as.factor(stim)))+
+  theme_classic()+
+  geom_line(aes(y = mupercept, col = as.factor(stim)))+
+  geom_line(aes(y = alpha), col = "orange")
+
 ```
 
 
+```{r}
+source(here::here("agent.R"))
+b0a = -3    #intercept learning rate 
+b1a = 1     #percept influence on learning rate
+b0p = -3      #intercept percept
+b1p = 1    #expectation effect on perception
+b2p = 1     #stimulus effect on perception
+b3p = -0.3
+kappa = 50    #precision on perception
+
+
+reals = data.frame(b0a = b0a, b1a = b1a, b0p = b0p, b1p = b1p, b2p = b2p, b3p = b3p, kappa = kappa) %>% pivot_longer(everything())
+trials = 160
+
+
+outcome = c(rbinom(trials/4,1,0.8),rbinom(trials/4,1,0.2),rbinom(trials/4,1,0.8),rbinom(trials/4,1,0.2))
+stim = rbinom(trials,1,0.5)
+
+df = agent2(b0a = b0a,
+      b1a = b1a,
+      b0p = b0p,
+      b1p = b1p,
+      b2p = b2p,
+      kappa = kappa,
+      outcome = outcome,
+      stim = stim,
+      trials = trials)
+
+df %>% ggplot(aes(x = trials))+geom_line(aes(y = expectation))+
+  geom_point(aes(y = outcome, col = as.factor(stim)))+
+  theme_classic()+
+  geom_line(aes(y = percept, col = as.factor(stim)))+
+  geom_line(aes(y = alpha), col = "orange")+
+  geom_line(aes(y = alphap), col = "green")
+  
+
+
+mod = cmdstan_model(here::here("model2.stan"))
+
+df = df[-1,]
+
+data = list(N = nrow(df), percept = df$percept, predict = df$prediction, stim = df$stim, outcome = df$outcome)
+
+
+fit <- mod$sample(
+  data = data,
+  chains = 4, 
+  parallel_chains = 4,
+  refresh = 500,
+  adapt_delta = 0.90,
+  max_treedepth = 10
+)
+
+#ff = fit$summary()
+draws = as_draws_df(fit$draws())
+
+draws %>% ggplot(aes(x = b1a, y = b0a))+geom_point()
+
+#ff %>% filter(str_detect(variable, "alphap") ) %>% mutate(trial = 1:nrow(.))%>% ggplot()+geom_line(aes(x = trial, y=mean))
+
+priors = draws %>% select(starts_with("prior")) %>% pivot_longer(everything()) %>% mutate(prior = 1, name = gsub("prior_", "",name))
+
+
+posterior = draws %>% select(c("b0a","b1a","b0p","b1p","b2p", "kappa")) %>% pivot_longer(everything()) %>% mutate(prior = 0)
+  
+  
+rbind(priors,posterior) %>% ggplot(aes(x = value))+geom_density(aes(col = as.factor(prior)))+facet_wrap(~name, scales = "free")+theme_classic()+
+  geom_vline(data = reals, aes(xintercept = value))
+
+```
+
+'
 
 ```{r}
 library(shiny)

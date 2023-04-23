@@ -1,0 +1,503 @@
+---
+title: "manuscript analysis"
+author: "Jesper Fischer Ehmsen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(brms, tidyverse, here, cmdstanr, loo, extraDistr, tidybayes)
+```
+
+## R Markdown
+
+#Note to self that the kappa is the precison for both the normal and beta distribution see below for what that assume for 
+$\mu = 0.5$
+```{r}
+kappa = 40
+hist(rnorm(10000,0.5,1/kappa^2))
+hist(rprop(10000, kappa, 0.5)) 
+```
+
+
+
+```{r parameter recovery, fig.width=8, fig.height=8}
+source(here::here("concise","scripts","agents.R"))
+
+source(here::here("concise","scripts","parameterrecovery.R"))
+
+
+m = seq(0.5,1.5,by = 0.3)
+n = seq(0.5,1.5,by = 0.3)
+q1 = seq(30,50,by = 5)
+q2 = q1
+kappa = 20
+autocor = TRUE
+bw = 0.2
+bc = 0.3
+bp = 0.4
+dist = FALSE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df = parameters %>% pmap_df(do_parameterrecover) %>% bind_rows()
+
+df %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)
+```
+
+
+```{r parameter recovery, fig.width=8, fig.height=8}
+m = 1.3
+n = 1.6
+q1 = seq(30,50,by = 5)
+q2 = q1
+kappa = 20
+autocor = TRUE
+bw = seq(-0.5,0.5,by = 0.5)
+bc = seq(-0.5,0.5,by = 0.5)
+bp = seq(-0.5,0.5,by = 0.5)
+dist = FALSE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df1 = parameters %>% pmap_df(do_parameterrecover) %>% bind_rows()
+
+df1 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)
+```
+
+
+```{r parameter recovery, fig.width=8, fig.height=8}
+m = seq(0.5,1.5,by = 0.3)
+n = seq(0.5,1.5,by = 0.3)
+q1 = seq(30,50,by = 5)
+q2 = q1
+kappa = 20
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df2 = parameters %>% pmap_df(do_parameterrecover) %>% bind_rows()
+
+df2 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)
+
+```
+
+
+```{r parameter recovery, fig.width=8, fig.height=8}
+m = 1.2
+n = 1.5
+q1 = seq(30,50,by = 3)
+q2 = seq(30,50,by = 3)
+kappa = 20
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist)
+
+#parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df3 = parameters %>% pmap_df(do_parameterrecover) %>% bind_rows()
+
+df3 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_smooth(method = "lm")+geom_abline(slope = 1, intercept = 0)
+```
+
+
+
+```{r}
+source(here::here("concise","scripts","parameterrecovery.R"))
+source(here::here("concise","scripts","agents.R"))
+m = 1.3
+n = 1.6
+q1 = seq(30,50,by = 10)
+q2 = q1
+kappa = 50
+autocor = TRUE
+bw = seq(0,1,by = 0.5)
+bc = seq(0,1,by = 0.5)
+bp = seq(0,1,by = 0.5)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df3 = parameters %>% pmap_df(do_parameterrecover_v2) %>% bind_rows()
+
+df3 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_smooth(method = "lm")+geom_abline(slope = 1, intercept = 0)
+
+```
+
+```{r fig.width=8, fig.width=8}
+#run this parameter recovery:
+
+
+source(here::here("concise","scripts","parameterrecovery.R"))
+source(here::here("concise","scripts","agents.R"))
+m = seq(0.7,1.8,by = 0.3)
+n = seq(0.7,1.8,by = 0.3)
+q1 = seq(30,50,by = 10)
+q2 = q1
+kappa = 40
+autocor = TRUE
+b = seq(0,1,by = 0.2)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,b,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df3 = parameters %>% pmap_df(do_parameterrecover_v3) %>% bind_rows()
+
+df3 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_smooth(method = "lm")+geom_abline(slope = 1, intercept = 0)
+
+#dd = df3 %>% filter(str_detect(.$variable, "q")) 
+
+#cor.test(dd$mean, dd$reals)
+
+
+#more trials
+
+source(here::here("concise","scripts","parameterrecovery.R"))
+source(here::here("concise","scripts","agents.R"))
+m = seq(0.7,1.8,by = 0.3)
+n = seq(0.7,1.8,by = 0.3)
+q1 = seq(30,50,by = 10)
+q2 = q1
+kappa = 40
+autocor = TRUE
+b = seq(0,1,by = 0.2)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,autocor,b,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df4 = parameters %>% pmap_df(do_parameterrecover_doubled) %>% bind_rows()
+
+df4 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_smooth(method = "lm")+geom_abline(slope = 1, intercept = 0)
+
+dd = df4 %>% filter(str_detect(.$variable, "q")) 
+
+cor.test(dd$mean, dd$reals)
+
+
+# model recovery of autocorrelation
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+
+source(here::here("concise","scripts","parameterrecovery.R"))
+source(here::here("concise","scripts","agents.R"))
+m = 1.6
+n = 1.1
+q1 = 35
+q2 = 35
+kappa = 40
+autocor = TRUE
+b = 0.2
+dist = TRUE
+
+df = poweragent_generalized(m = m,
+                            n = n,
+                            q1 = q1,
+                            q2 = q2,
+                            kappa = kappa,
+                            autocor = autocor,
+                            bw = b,
+                            bc = b,
+                            bp = 0,
+                            dist = dist)
+
+
+data1 = list(Tw1 = df$Tw1,
+             Tw2 = df$Tw2,
+             Tc1 = df$Tc1,
+             Tc2 = df$Tc2, 
+             N = nrow(df), 
+             w = df$warm, 
+             c = df$cold, 
+             p = df$pain,
+             dist = dist)
+  print("same q and autocor")
+  model = here::here("concise","stan","generalizedpower_sameq_with_newauto_simp.stan")
+  mod = cmdstan_model(model)
+  
+  fit <- mod$sample(
+    data = data1, 
+    seed = 123, 
+    chains = 4, 
+    parallel_chains = 4,
+    refresh = 500
+  )
+
+
+post = as_draws_df(fit$draws()) %>% 
+  select(c("b","q","n","m","kappa")) %>% 
+  mutate(posterior = T)
+
+
+priors = as_draws_df(fit$draws()) %>% 
+  select(c("prior_b","prior_q","prior_n","prior_m","prior_kappa"))%>% 
+  mutate(posterior = F) %>%
+  rename_with(~sub("^prior_", "", .), starts_with("prior_"))
+df = rbind(post,priors)
+
+df %>% pivot_longer(cols = c("b","q","n","m","kappa")) %>% ggplot(aes(x = value, fill = posterior))+geom_histogram(alpha = 0.5, position="identity")+facet_wrap(~name, scales = "free")+theme_classic()
+
+```
+
+
+
+```{r}
+#moodel recovery:
+
+source(here::here("concise","scripts","model_recovery.R"))
+source(here::here("concise","scripts","parameterrecovery.R"))
+source(here::here("concise","scripts","agents.R"))
+m = seq(0.7,1.0,by = 0.3)
+n = seq(0.7,1.0,by = 0.3)
+q1 = seq(30,50,by = 10)
+q2 = q1
+kappa = 40
+b = seq(0,1,by = 0.2)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kappa,b,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+df4 = parameters %>% pmap_df(modelrecovery) %>% bind_rows()
+
+df4 %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_smooth(method = "lm")+geom_abline(slope = 1, intercept = 0)
+
+```
+
+
+
+```{r}
+source(here::here("concise","scripts","agents.R"))
+m = 0.4
+n = 0.7
+q1 = 40
+q2 = 40
+kappa = 30
+autocor = TRUE
+bw = 1
+bc = 0
+bp = 0.7
+
+df = poweragent_generalized_v2(m,n,q1,q2,kappa,autocor,bw,bc,bp,dist = TRUE)
+
+data1 = list(Tw1 = df$Tw1,
+             Tw2 = df$Tw2,
+             Tc1 = df$Tc1,
+             Tc2 = df$Tc2, 
+             N = nrow(df), 
+             w = df$warm, 
+             c = df$cold, 
+             p = df$pain,
+             dist = FALSE)
+  
+mod = cmdstanr::cmdstan_model(here::here("concise","stan","generalizedpower_sameq_with_newauto.stan"))
+
+
+fit <- mod$sample(
+  data = data1, 
+  seed = 123, 
+  chains = 4, 
+  parallel_chains = 4,
+  refresh = 500
+)
+
+
+ff = fit$summary()
+
+np_cp <- nuts_params(fit)
+
+posterior_cp = as.array(fit$draws(c("m","n","q","kappa","bw","bc","bp")))
+
+mcmc_parcoord(posterior_cp, np = np_cp)
+
+mcmc_pairs(posterior_cp, np = np_cp, pars = c("kappa","bw","bc","bp"),
+           off_diag_args = list(size = 0.75))
+```
+
+
+# Model recovery
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+m = 1.5
+n = 0.5
+q1 = 20
+q2 = 40
+kw = 3
+kc = 3
+kappa = 50
+autocor = TRUE
+bw = 1
+bc = 1
+bp = 0
+dist = TRUE
+
+
+tgi = poweragent_gen(m,n,q1,q2,kw,kc,kappa, autocor = TRUE,bw,bc,bp, dist = TRUE)
+
+
+
+model22 = cmdstan_model(here::here("concise","realstuf","stan","Gen-power.stan"))
+
+data = list(Tw1 = tgi$Tw1,Tw2 = (tgi$Tw2),Tc1 = (tgi$Tc1),Tc2 = (tgi$Tc2), N = nrow(tgi), w = (tgi$warm), c = (tgi$cold), p = tgi$pain, dist = TRUE)
+
+fit <- model22$sample(
+  data = data, 
+  seed = 123, 
+  chains = 4, 
+  parallel_chains = 4,
+  refresh = 500
+)
+
+
+
+plot_prior_posterior_update(fit, parameters = c("m","n","q1","q2","kw","kc","kappa","bw","bc","bp"),
+                            reals = c(m = m,n = n,q1 = q1,q2 = q2,kw = kw,kc = kc,kappa = kappa,bw = bw,bc = bc,bp = bp))
+
+```
+
+
+
+
+
+
+
+# model comparison diamond vs brms
+```{r}
+
+
+
+source(here::here("concise","scripts","model_comparison.R"))
+
+tgi = read.csv(here::here("data","tgi.csv"))
+
+tgi$cold = tgi$cold/100
+tgi$warm = tgi$warm/100
+tgi$pain = tgi$pain/100
+
+
+
+
+tgi$subj_id = as.factor(tgi$subj_id)
+
+tgi$Tw1 = ifelse(tgi$temp2 <= 30, 0 ,ifelse(tgi$temp2 > 30, tgi$temp2-30, NA))
+tgi$Tc1 = ifelse(tgi$temp2 >= 30, 0 ,ifelse(tgi$temp2 < 30, 30-tgi$temp2, NA))
+tgi$Tw2 = ifelse(tgi$temp1 <= 30, 0 ,ifelse(tgi$temp1 > 30, tgi$temp1-30, NA))
+tgi$Tc2 = ifelse(tgi$temp1 >= 30, 0 ,ifelse(tgi$temp1 < 30, 30-tgi$temp1, NA))
+
+tgi$warm1 = tgi$warm
+tgi$cold1 = tgi$cold
+tgi$pain1 = tgi$pain
+
+tgi$warm1 = ifelse(tgi$warm1 == 0,0.01,ifelse(tgi$warm1 == 1, 0.99, tgi$warm1))
+tgi$cold1 = ifelse(tgi$cold1 == 0,0.01,ifelse(tgi$cold1 == 1, 0.99, tgi$cold1))
+tgi$pain1 = ifelse(tgi$pain1 == 0,0.01,ifelse(tgi$pain1 == 1, 0.99, tgi$pain1))
+
+data_list <- split(tgi, tgi$subj_id)
+
+
+#tgi = tgi %>% filter(subj_id == unique(subj_id)[subj])
+
+#model1 = here("concise","stan","test_pain.stan")
+
+formula = brms::bf(mvbind(cold,warm,pain) ~ temp1+temp2,
+              zoi ~ temp1+temp2,
+              family = zero_one_inflated_beta())
+
+
+#make_stancode(model1, data = tgi1)
+
+
+model1 = here::here("concise","stan","brms_ind.stan")
+
+model2 = here("concise","stan","test_pain_comp.stan")
+
+#df = model_comparison(data = data1,
+#                      model1 = model1,
+#                      model2 = model2)
+
+plan(multisession, workers = 10)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~model_comparison(.x, model1, model2, brms = TRUE, formula = formula))
+
+
+# Split the first element of the resulting list into a separate data frame
+loocompar <- map_dfr(results, 1)
+
+# Split the second element of the resulting list into a separate data frame
+weights <- map_dfr(results, 2)
+
+
+
+
+
+
+loocompar %>% filter(elpd_diff < 0) %>% mutate(id = as.numeric(as.factor(id))) %>%
+  ggplot(aes(x = id, y = elpd_diff, col = models))+
+  geom_pointrange(aes(x = id, y = elpd_diff, ymax = elpd_diff+2*se_diff, ymin = elpd_diff-2*se_diff))+
+  theme_classic()+
+  geom_hline(yintercept = 0)
+
+
+weights %>% 
+  filter(weights > 0.5)%>% 
+  ggplot(aes(x = id, y = weights, col = model))+
+  geom_point()+
+  theme_classic()+
+  geom_hline(yintercept = 0.5)
+
+
+
+
+```
+
+
+

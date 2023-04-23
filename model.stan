@@ -17,6 +17,8 @@ parameters {
   real b0p;
   real b1p;
   real b2p;
+  real<lower=0> beta;
+  
 }
 
 transformed parameters{
@@ -24,18 +26,24 @@ transformed parameters{
   vector[N] expectation;
   vector[N] alpha;
   vector[N] mupercept;
+  vector[N] prob;
+  
   
   
   expectation[1] = 0.5;
-  
+  mupercept[1] = 0.01;
   
   
   for (i in 2:N){
   
-    alpha[i] = inv_logit(b0a+b1a+percept[i-1]);
+    alpha[i] = inv_logit(b0a+b1a*mupercept[i-1]);
+
     expectation[i] = expectation[i-1]+alpha[i]*(outcome[i]-expectation[i-1]);
-    mupercept[i] = inv_logit(b0p+b1p*expectation[i]+b2p*stim[i]);
+
+    mupercept[i] = inv_logit(b0p+b1p*(expectation[i]*(1-expectation[i]))+b2p*stim[i]);
     
+    
+    prob[i] = expectation[i]^beta/((expectation[i]^beta)+(1-expectation[i])^(beta));
   }
   
   
@@ -45,16 +53,40 @@ transformed parameters{
   
 }
 
-// The model to be estimated. We model the output
-// 'y' to be normally distributed with mean 'mu'
-// and standard deviation 'sigma'.
 model {
-  
+    target += normal_lpdf(b0a | 0, 2);
+    target += normal_lpdf(b1a | 0, 2);
+    target += normal_lpdf(b0p | 0, 2);
+    target += normal_lpdf(b1p | 0, 2);
+    target += normal_lpdf(b2p | 0, 2);
+    
+    target += lognormal_lpdf(kappa |3.5,0.5);
+    target += lognormal_lpdf(beta |3.5,0.5);
+    
+    
   
     target += beta_proportion_lpdf(percept | mupercept,kappa);
     
     for(i in 2:N){
-      target += bernoulli_lpmf(predict[i] | expectation[i]);
+      target += bernoulli_lpmf(predict[i] | prob[i]);
     }
+}
+
+
+generated quantities{
+  
+    real prior_b0a = normal_rng(0, 2);
+    real prior_b1a = normal_rng(0, 2);
+    
+    real prior_b0p = normal_rng(0, 2);
+    real prior_b1p = normal_rng(0, 2);
+    
+    real prior_b2p = normal_rng(0, 2);
+    real prior_b3p = normal_rng(0, 2);
+    
+    real prior_kappa = lognormal_rng(3.5,0.5);
+    real prior_beta = lognormal_rng(3.5,0.5);
+    
+    
 }
 

@@ -1,0 +1,625 @@
+---
+title: "Manuscript"
+author: "Jesper Fischer Ehmsen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(brms, tidyverse, here, cmdstanr, loo, extraDistr, tidybayes, furrr,bayesplot, patchwork, progressr)
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+
+```
+
+
+## R Markdown
+
+#Note to self that the kappa is the precison for both the normal and beta distribution see below for what that assume for 
+$\mu = 0.5$
+```{r}
+kappa = 1000
+hist(rnorm(10000,0.5,1/kappa^2))
+hist(rprop(10000, kappa, 0.5)) 
+```
+
+
+
+```{r plot prior posterior updates}
+#seems to be a problem when we start with only one thermode active.....
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+
+m = 1
+n = 1
+q1 = 40
+q2 = 40
+kw = 0.5
+kc = 0.5
+kappa = 50
+autocor = TRUE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE
+
+
+tgi = poweragent_gen(m,n,q1,q2,kw,kc,kappa, autocor = autocor,bw,bc,bp, dist = dist)
+tgi %>% pivot_longer(cols = c("warm","cold","pain")) %>% ggplot(aes(x = value))+facet_wrap(~name)+geom_histogram()
+
+model22 = cmdstan_model(here::here("concise","realstuf","stan","powerlaw_fixed_k_with_auto_on_thermo.stan"))
+
+data = list(Tw1 = tgi$Tw1,Tw2 = (tgi$Tw2),Tc1 = (tgi$Tc1),Tc2 = (tgi$Tc2), N = nrow(tgi), w = (tgi$warm), c = (tgi$cold), p = tgi$pain, dist = TRUE)
+
+
+
+fit <- model22$sample(
+  data = data,
+  chains = 4, 
+  parallel_chains = 4,
+  refresh = 500
+)
+
+model22 = cmdstan_model(here::here("concise","realstuf","stan","real_diamond_with_auto_on_thermo.stan"))
+
+fit1 <- model22$sample(
+  data = data,
+  chains = 4, 
+  parallel_chains = 1,
+  refresh = 500
+)
+
+
+
+#plot_prior_posterior_update(fit, parameters = c("m","n","q1","kw","kc","kappa","bw","bc","bp"),
+#                            reals = c(m = m,n = n,q1 = q1,q2 = q2,kw = kw,kc = kc,kappa = kappa,bw = bw,bc = bc,bp = bp))
+
+plot_prior_posterior_update(fit, parameters = c("m","n","q1","kappa","bw","bc"),
+                            reals = c(m = m,n = n,q1 = q1,q2 = q2,kappa = kappa,bw = bw,bc = bc))
+
+
+
+plot_prior_posterior_update(fit1, parameters = c("q1","bw","bc","kappa","kc","kw"),
+                            reals = c(kw = kw,kc = kc,q1 = q1,q2 = q2,kappa = kappa,bw = bw,bc = bc))
+
+
+loo::loo_compare(list(fit$loo(),fit1$loo()))
+
+#
+
+posterior_cp <- as.array(fit$draws())
+np_cp <- nuts_params(fit)
+
+mcmc_pairs(posterior_cp, np = np_cp, pars = c("q1","n","m", "kappa"),
+           off_diag_args = list(size = 0.75))
+```
+
+
+
+```{r parameter recovery for the simplest model, fig.width=8, fig.height=8}
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+m = 1
+n = 1
+q1 = seq(20,80,by = 0.1)
+q2 = q1
+kw = 1
+kc = 1
+kappa = c(10,100,1000)
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 60)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)
+
+get_pr_plot(parameterrecover)
+
+#save.image("~/TGI-comp/concise/realstuf/parameterrecovery/real_diamond(q).RData")
+
+#rm(list = ls())
+
+```
+
+
+
+```{r parameter recovery for the real diamond model, fig.width=10, fig.height=5}
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
+m = 1
+n = 1
+q1 = seq(20,80,by = 10)
+q2 = q1
+kw = seq(0.5,2,by = 0.2)
+kc = seq(0.5,2,by = 0.2)
+kappa = c(10,100,1000)
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 60)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover2(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>% filter(div==0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)
+
+get_pr_plot(parameterrecover)
+
+
+#save.image("~/TGI-comp/concise/realstuf/parameterrecovery/real_diamond(q,kw,kc)2.RData")
+
+rm(list = ls())
+
+```
+
+
+```{r parameter recovery for the real diamond model with auto on thermo, fig.width=8, fig.height=8}
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
+
+m = 1
+n = 1
+q1 = seq(20,80,by = 10)
+q2 = q1
+kw = seq(0.5,2,by = 0.7)
+kc = seq(0.5,2,by = 0.7)
+kappa = c(10,100,1000)
+autocor = TRUE
+bw = seq(0,1,by = 0.3)
+bc = seq(0,1,by = 0.3)
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 2)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover3(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>%filter(div ==0) %>%  ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+#get_pr_plot(parameterrecover)
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/real_diamond_auto(q,kw,kc,bw,bc).RData")
+rm(list = ls())
+```
+
+
+
+```{r parameter recovery for the powerlaw with fixed k, fig.width=8, fig.height=8}
+#run again
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
+
+
+m = seq(0.5,2,by = 0.3)
+n = seq(0.5,2,by = 0.3)
+q1 = seq(20,80,5)
+q2 = q1
+kw = 1
+kc = 1
+kappa = c(10,100,1000)
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 3)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover4(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>% filter(div == 0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+get_pr_plot(parameterrecover)
+
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m).RData")
+rm(list = ls())
+```
+
+```{r parameter recovery for the powerlaw with fixed k and with auto on thermo, fig.width=8, fig.height=8}
+#run again
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+m = seq(0.5,2,by = 0.5)
+n = seq(0.5,2,by = 0.5)
+q1 = seq(20,80,20)
+q2 = q1
+kw = 1
+kc = 1
+kappa = c(10,100,1000)
+autocor = TRUE
+bw = seq(0,0.9,by = 0.3)
+bc = seq(0,0.9,by = 0.3)
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+#plan(multisession, workers = 10)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover5(.x), .progress = TRUE)
+
+my_pkg_fn <- function(x) {
+  p <- progressor(steps = length(x))
+  
+  future_map(x, ~{
+    p()
+    Sys.sleep(.2)
+    do_parameterrecover5(.x)
+  })
+}
+
+with_progress({
+  result <- my_pkg_fn(data_list)
+})
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>% filter(div < 1) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc).RData")
+rm(list = ls())
+```
+
+
+
+```{r parameter recovery for the powerlaw with fixed k and with auto on all, fig.width=8, fig.height=8}
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+m = seq(0.5,1.5,by = 0.5)
+n = seq(0.5,1.5,by = 0.5)
+q1 = seq(20,60,20)
+q2 = q1
+kw = 1
+kc = 1
+kappa = c(10,100,100)
+autocor = TRUE
+bw = seq(0,0.9,by = 0.3)
+bc = seq(0,0.9,by = 0.3)
+bp = seq(0,0.9,by = 0.3)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 60)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover6(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+#parameterrecover %>% filter(div < 1) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc,bp).RData")
+rm(list = ls())
+
+```
+
+
+
+```{r parameter recovery for the full power(sameq), fig.width=8, fig.height=8}
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+m = seq(0,1.5,by = 0.5)
+n = seq(0,1.5,by = 0.5)
+q1 = seq(20,60,20)
+q2 = q1
+kw = seq(0.5,2,by = 1)
+kc = seq(0.5,2,by = 1)
+kappa = c(10,100,1000)
+autocor = TRUE
+bw = seq(0.1,0.6,by = 0.3)
+bc = seq(0.1,0.6,by = 0.3)
+bp = seq(0.1,0.6,by = 0.3)
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 60)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover7(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+#parameterrecover %>% filter(div == 0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc,bp,kw,kc).RData")
+rm(list = ls())
+
+```
+
+
+```{r model recovery}
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","model_recovery.R"))
+
+
+m = 1
+n = 1
+q1 = 40
+q1 = seq(20,60,5)
+q2 = q1
+kw = 1
+kc = 1
+kappa = 50
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE
+
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+#plan(multisession, workers = 60)
+
+plan(multisession, workers = 4)
+
+results <- future_map(data_list, ~model_fitter(.x), .progress = TRUE)
+
+
+model_fitter(data_list[[1]])
+
+modelstack = map_dfr(results, 3)
+
+
+which.max(modelstack[7,])
+
+
+modelcom = f[[2]]
+
+f = f[[1]]
+highest_mean_row <- f[which.min(f$means), ]
+
+f %>% ggplot(aes(x = names))+theme_classic()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  geom_pointrange(aes(x = names, y = means, ymin = means-sds, ymax = means+sds))+
+    geom_pointrange(data = highest_mean_row, aes(x = names, y = means, ymin = means - sds, ymax = means + sds), color = "red") +
+  labs(x = "Names", y = "Mean Value")
+
+```
+
+
+```{r model comparison, fig.width=8, fig.height=6}
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+
+tgi = read.csv(here::here("data","tgi.csv"))
+
+tgi$cold = tgi$cold/100
+tgi$warm = tgi$warm/100
+tgi$pain = tgi$pain/100
+
+
+
+
+tgi$subj_id = as.factor(tgi$subj_id)
+
+tgi$Tw1 = ifelse(tgi$temp2 <= 30, 0 ,ifelse(tgi$temp2 > 30, tgi$temp2-30, NA))
+tgi$Tc1 = ifelse(tgi$temp2 >= 30, 0 ,ifelse(tgi$temp2 < 30, 30-tgi$temp2, NA))
+tgi$Tw2 = ifelse(tgi$temp1 <= 30, 0 ,ifelse(tgi$temp1 > 30, tgi$temp1-30, NA))
+tgi$Tc2 = ifelse(tgi$temp1 >= 30, 0 ,ifelse(tgi$temp1 < 30, 30-tgi$temp1, NA))
+
+tgi$warm1 = tgi$warm
+tgi$cold1 = tgi$cold
+tgi$pain1 = tgi$pain
+
+tgi$warm1 = ifelse(tgi$warm1 == 0,0.01,ifelse(tgi$warm1 == 1, 0.99, tgi$warm1))
+tgi$cold1 = ifelse(tgi$cold1 == 0,0.01,ifelse(tgi$cold1 == 1, 0.99, tgi$cold1))
+tgi$pain1 = ifelse(tgi$pain1 == 0,0.01,ifelse(tgi$pain1 == 1, 0.99, tgi$pain1))
+
+
+tgi$dist = TRUE
+data_list <- split(tgi, tgi$subj_id)
+
+
+#tgi = tgi %>% filter(subj_id == unique(subj_id)[subj])
+
+#model1 = here("concise","stan","test_pain.stan")
+
+formula = brms::bf(mvbind(cold,warm,pain) ~ temp1+temp2,
+              zoi ~ temp1+temp2,
+              family = zero_one_inflated_beta())
+
+
+#make_stancode(model1, data = tgi1)
+
+
+model1 = here::here("concise","realstuf","stan","brms_ind.stan")
+
+#model2 = here("concise","realstuf","stan","real_diamond.stan")
+model2 = here("concise","realstuf","stan","powerlaw_fixed_k_with_auto_on_thermo.stan")
+
+#df = model_comparison(data = data1,
+#                      model1 = model1,
+#                      model2 = model2)
+
+plan(multisession, workers = 30)
+
+#qq = model_comparison(data_list[[1]],model1,model2, brms = TRUE, formula = formula)
+
+results <- future_map(data_list, ~model_comparison(.x, model1, model2, brms = TRUE, formula = formula))
+
+
+# Split the first element of the resulting list into a separate data frame
+loocompar <- map_dfr(results, 1)
+
+# Split the second element of the resulting list into a separate data frame
+weights <- map_dfr(results, 2)
+
+
+divs = map_dfr(results,3)
+
+
+
+loocompar %>% filter(elpd_diff < 0) %>% mutate(id = as.numeric(as.factor(id))) %>%
+  ggplot(aes(x = id, y = elpd_diff, col = models))+
+  geom_pointrange(aes(x = id, y = elpd_diff, ymax = elpd_diff+2*se_diff, ymin = elpd_diff-2*se_diff))+
+  theme_classic()+
+  geom_hline(yintercept = 0)
+
+
+weights %>% 
+  filter(weights > 0.5)%>% 
+  ggplot(aes(x = id, y = weights, col = model))+
+  geom_point()+
+  theme_classic()+
+  geom_hline(yintercept = 0.5)
+
+
+
+```
+
+
+
+
+
+```{r Comparison between diamond with arclengths and diamond with x, include=FALSE}
+
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+
+
+m = 1
+n = 1
+q1 = 20
+q2 = 20
+kw = 1
+kc = 1
+kappa = 20
+autocor = FALSE
+bw = 0
+bc = 0
+bp = 0
+dist = TRUE
+
+
+tgi = poweragent_gen(m,n,q1,q2,kw,kc,kappa, autocor = TRUE,bw,bc,bp, dist = TRUE)
+
+
+
+
+data1 = model1(20,20,20,20,0.1)
+
+hist(data1$area_w)
+hist(tgi$a1_w+tgi$a2_w+tgi$a3_w)
+tgi$awarm = tgi$a1_w+tgi$a2_w+tgi$a3_w
+hist(tgi$a1_w+tgi$a2_w+tgi$a3_w-data1$area_w)
+
+```
+
+
