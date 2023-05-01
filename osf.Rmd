@@ -1,0 +1,163 @@
+---
+title: "osf"
+author: "jesper fischer ehmsen"
+date: "2023-04-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tidyverse, osfr, lmerTest, MuMIn, DHARMa, here, cmdstanr, tidybayes, bayesplot, posterior)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+```{r}
+osf_auth(token = readLines("osf.txt")[[1]])
+
+project = osf_retrieve_node("https://osf.io/bqkz3/")
+
+
+project %>% osf_ls_files() %>% osf_download(path = here::here("osf"))
+
+
+```
+
+
+
+
+```{r, fig.height=10, fig.width=10}
+df1 = read.csv(here::here("osf","Data","data1.csv"), header = FALSE)
+
+colnames(df1) = c("trial","cue","cue_type","intensity","expected_pain","Pain_Rating","id")
+
+df2 = read.csv(here::here("osf","Data","data2.csv"), header = FALSE)
+
+colnames(df2) = c("trial","cue","cue_type","intensity","expected_pain","Pain_Rating","NPS","id")
+
+
+df1 %>% ggplot(aes(x = as.factor(intensity),y = Pain_Rating, fill = as.factor(cue_type)))+geom_boxplot()+facet_wrap(~id)+theme_classic()
+
+
+###stan
+
+folder_path <- here::here("osf","StanModels")
+files <- list.files(path = folder_path, pattern = "\\.txt$", full.names = TRUE)
+
+for (file in files) {
+  new_filename <- gsub("\\.txt$", ".stan", file)
+  file.rename(from = file, to = new_filename)
+}
+
+
+q = df1 %>% pivot_wider(id_cols = trial, names_from = id, values_from = Pain_Rating)
+
+?pivot_wider
+```
+```{r}
+
+source("osf_scripts.R")
+alphaI = 100
+betaI = 0.3
+alphaY = 100
+betaY = 0.6
+painScale = 0.9
+expectScale = 0.1
+nTrials = 160
+nSubject = 5
+
+t1 = data.frame(t = 0, q = 0)
+
+for(q in c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9)){
+  betaY = q
+  for(i in 1:1000){
+    df1 = RW_agent(alphaI, betaI, alphaY,  betaY, painScale, expectScale, nTrials, nSubject)q
+    
+    #df1 %>% ggplot(aes(x = as.factor(nox), y = PainRating))+geom_boxplot()
+    
+    m = summary(lmer(PainRating ~ expectRating+nox+(1|name), data = df1[[1]]))
+    t = m$coefficients[2,4]
+    t1 = rbind(t1,c(t,q))
+  }
+}
+t1 %>% ggplot(aes(t))+facet_wrap(~q)+geom_histogram()
+t1 %>% group_by(q) %>% summarize(mean = mean(t), sd = sd(t))
+
+```
+
+
+```{r, fig.width=10, fig.height=10}
+#fitting
+
+source("osf_scripts.R")
+alphaI = 100
+betaI = 0.3
+alphaY = 100
+betaY = 0.6
+painScale = 0.1
+expectScale = 0.1
+nTrials = 160
+nSubject = 2
+
+
+df1 = RW_agent(alphaI, betaI, alphaY,  betaY, painScale, expectScale, nTrials, nSubject)
+
+#df1 %>% ggplot(aes(x = as.factor(nox), y = PainRating))+geom_boxplot()
+
+summary(lmer(PainRating ~ expectRating+nox+(1|name), data = df1[[1]]))
+
+
+df1[[1]] %>% filter(name == "X1") %>% ggplot(aes())+facet_wrap(~name)+geom_line(aes(x = trial, y = PainRating), col = "red")+geom_line(aes(x = trial, y = expectRating), col = "blue")+theme_classic()+geom_point(aes(x = trial, y = as.numeric(as.character(nox))))
+
+ccf(df1[[1]]$expectRating, df1[[1]]$PainRating)
+df1[[2]]
+
+
+
+df1[[1]] %>% ggplot(aes(x= abs(expectRating), y = abs(PainRating)))+facet_wrap(~name)+geom_point()+geom_smooth(method = "lm")+facet_wrap(~name)
+```
+
+```{r}
+df = df1[[1]]
+
+data = list(nSubject = length(unique(df$name)), 
+            nTrials = length(unique(df$trial)), 
+            painRating = as.matrix(df %>% pivot_wider(id_cols = trial, names_from = name, values_from = PainRating) %>% mutate(trial= NULL)),
+            expectPain = as.matrix(df %>% pivot_wider(id_cols = trial, names_from = name, values_from = expectRating)%>% mutate(trial= NULL)),
+            noxInput = as.matrix(df %>% pivot_wider(id_cols = trial, names_from = name, values_from = nox)%>% mutate(trial= NULL)))
+
+
+mod = cmdstan_model(here::here("myRW.stan"))
+
+fit <- mod$sample(
+      data = data,
+      chains = 4, 
+      parallel_chains = 4,
+      refresh = 500,
+      adapt_delta = 0.90,
+      max_treedepth = 15
+    )
+
+as_draws_df(fit) %>% select(alphaI,alphaY) %>% pivot_longer(everything()) %>% ggplot(aes(x = value))+geom_histogram()+theme_classic()+facet_wrap(~name)
+
+
+mcmc_pairs(as.array(fit$draws()), np = nuts_params(fit), pars = c("betaI","betaY","alphaI","alphaY","painScale","expectScale"),
+           off_diag_args = list(size = 0.75))
+
+parameters = c("betaI","betaY","painScale","expectScale")
+
+plot_prior_posterior_update_hier(fit, parameters, reals = c(betaI = betaI,betaY = betaY, painScale = painScale, expectScale = expectScale))
+
+
+parameters = c("alphaCoefI", "yParam", "expectError","painError")
+reals = df1[[2]] %>% mutate(trial = 1:10) %>% pivot_longer(cols = - trial) %>%  mutate(name = paste0(as.character(name),"[",as.character(trial), "]"), trial = NULL)
+
+plot_prior_posterior_update_sub(fit, parameters, reals = reals)
+```
+

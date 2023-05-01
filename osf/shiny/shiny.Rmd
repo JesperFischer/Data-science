@@ -1,0 +1,215 @@
+---
+title: "shiny"
+author: "Jesper Fischer Ehmsen"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+  
+```{r}
+
+
+
+```
+
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(shinythemes)
+library(shinyWidgets)
+library(here)
+library(tidyverse)
+
+
+alphaI = 100
+betaI = 0.3
+alphaY = 100
+betaY = 0.6
+painScale = 0.1
+expectScale = 0.1
+nTrials = 80
+nSubject = 2
+
+
+source(here::here("osf_scripts.R"))
+
+#input = data.frame(kappa = 1.4, theta = 0.3, omega = -2,Inital_prec2 = 4,Inital_mu2 = 0,Inital_mu3 = 0,Inital_prec3 = 4)
+
+
+
+
+slider_params1 <- list(
+  list("alphaI", "alphaI", 0, 100, 100, 1),
+  list("betaI", "betaI:", 0, 1, 0.3, 0.1),
+  list("alphaY", "alphaY:", 0, 100, 100, 1),
+  list("betaY", "betaY", 0, 1, 0.6, 0.1),
+  list("painScale", "painScale", 0, 5, 0.5, 0.1),
+  list("expectScale", "expectScale", 0, 5, 0.5, 0.1))
+
+
+
+ui <- navbarPage(
+  "Hello",
+    tabPanel("Page 1",
+      sidebarLayout(
+        sidebarPanel(
+          lapply(slider_params1, function(p) {
+            do.call(sliderInput, p)
+          }),
+          actionButton("generate_data", "Generate New Data")
+        ),
+        mainPanel(
+          plotOutput("plot"), height = "2000px")
+    )
+  )
+)
+
+
+
+server <- function(input, output) {
+  
+  data <- eventReactive(input$generate_data, {
+        
+        noxInput = matrix(rnorm(79, 0,1), nrow = nTrials-1, ncol=nSubject)
+        
+        noxInput = ifelse(noxInput > 0, 1, 0)
+        
+        return(noxInput)
+  })
+  
+ rw = reactive({
+    
+    df1 = RW_agent2(input$alphaI, input$betaI, input$alphaY,  input$betaY, input$painScale, input$expectScale, nTrials, 2, data())
+  
+    return(df1[[1]])   
+ })
+
+ 
+ 
+ output$plot <- renderPlot({
+   
+   df1 = rw()
+   
+  df1 %>% filter(name == "X1") %>% ggplot(aes())+facet_wrap(~name)+
+    geom_line(aes(x = trial, y = PainRating), col = "red")+
+    geom_line(aes(x = trial, y = expectRating), col = "blue")+
+    theme_classic()+
+    geom_point(aes(x = trial, y = as.numeric(as.character(nox))))
+   
+   
+ })
+ 
+ 
+  
+}
+shinyApp(ui = ui, server = server)
+
+input = data.frame(alphaI = 0.4, betaI = 0.5, alphaY = 0.5, betaY = 0.5, painScale = 0.7, expectScale = 0.9)
+
+RW_agent(input$alphaI, input$betaI, input$alphaY,  input$betaY, input$painScale, input$expectScale, input$nTrials, input$nSubject)
+```
+
+
+
+```{r}
+Kalman_filter = function(expectScale,painScale,etaScale,psiScale,nTrials, nSubject){
+  
+    
+    painRating = array(NA, c(nTrials,nSubject))
+    expectPain = array(NA, c(nTrials,nSubject))
+    
+    noxInput = matrix(rnorm(79, 0,1), nrow = nTrials-1, ncol=nSubject)
+    noxInput = ifelse(noxInput > 0, 1, 0)
+    
+    
+    #int<lower=1> myMulti;
+    #int<lower=1> uniformPriorParameter;
+    
+    painMu = array(NA, c(nTrials, nSubject))
+    painVar = array(NA, c(nTrials, nSubject))
+    
+    
+    expectMu = array(NA, c(nTrials, nSubject))
+    expectVar = array(NA, c(nTrials, nSubject))
+    
+    
+    predErr = array(NA, c(nTrials, nSubject))
+    
+    alphaCoefI = array(NA, nSubject)
+    yParam = array(NA, nSubject)
+    painError = array(NA, nSubject)
+    expectError = array(NA, nSubject)
+  
+    sigmaEpsilon = 1
+  
+    sigmaEta = array(NA, nSubject)
+    sigmaPsi = array(NA, nSubject)
+    painError = array(NA, nSubject)
+    expectError = array(NA, nSubject)
+    
+    
+  
+    
+    
+    for (s in 1:nSubject) {
+        
+        expectMu[1,s] = 0.5
+        expectVar[1,s] = sigmaEta[s]
+        
+      for (t in 1:(nTrials)){
+        painMu[t,s] =  ( sigmaEpsilon * expectMu[t,s] + (sigmaPsi[s] + expectVar[t,s]) * noxInput[t,s] ) / 
+          (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s]);
+        
+        painVar[t,s] = ( sigmaEpsilon * (sigmaPsi[s] + expectVar[t,s]) ) / (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s]) ;    
+        
+        expectMu[t,s] = ((sigmaEpsilon + sigmaPsi[s]) * expectMu[t,s] + (expectVar[t,s] * noxInput[t,s])) / 
+          (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s]) ;
+        
+        expectVar[t,s] = ((sigmaEpsilon + sigmaPsi[s]) * expectVar[t,s] / (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s])) + sigmaEta[s];
+      }
+    }
+  
+  model {
+    for (s in 1:nSubject){
+      for (t in 1:nTrials){
+        target += normal_lpdf(painRating[t,s] | painMu[t,s], painError[s]);
+        target += normal_lpdf(expectPain[t,s] | expectMu[t,s], expectError[s]);
+      }
+      
+      target += lognormal_lpdf(sigmaEta[s] | 0, etaScale);
+      target += lognormal_lpdf(sigmaPsi[s] | 0, psiScale);
+      
+      
+      
+      target += lognormal_lpdf(painError[s] | 0, painScale);
+      target += lognormal_lpdf(expectError[s] | 0, expectScale);
+    }
+    
+    // Hierarchical Priors
+    
+    target += normal_lpdf(etaScale | 0 , 5)-normal_lccdf(0 | 0, 5);
+    target += normal_lpdf(psiScale | 0 , 5)-normal_lccdf(0 | 0, 5);
+    
+    target += normal_lpdf(painScale | 0 , 5)-normal_lccdf(0 | 0, 5);
+    target += normal_lpdf(expectScale | 0 , 5)-normal_lccdf(0 | 0, 5);
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+}
+
+```
+
