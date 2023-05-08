@@ -133,16 +133,20 @@ do_parameterrecover3 = function(data){
   })
   
   if(is.environment(fit)){
-    return(data.frame(fit$summary(c("q1","kw","kc","bw","bc","kappa")), reals = c(data$q1,data$kw, data$kc,data$bw,data$bc, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+    parameters = c("q1","kw","kc","bw","bc","kappa")
+    np = length(parameters)
+    return(data.frame(fit$summary(parameters), reals = c(data$q1,data$kw, data$kc,data$bw,data$bc, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
   }else{
-    return(data.frame(variable = c("q1","kw","kc","bw","bc","kappa"), 
-               mean = rep(NA,6),
-               median = rep(NA,6), 
-               sd = rep(NA,6), 
-               q5 = rep(NA,6), 
-               q95 = rep(NA,6), rhat = rep(NA,6), ess_bulk= rep(NA,6), ess_tail= rep(NA,6),
+    parameters = c("q1","kw","kc","bw","bc","kappa")
+    np = length(parameters)
+    return(data.frame(variable = parameters, 
+               mean = rep(NA,np),
+               median = rep(NA,np), 
+               sd = rep(NA,np), 
+               q5 = rep(NA,np), 
+               q95 = rep(NA,np), rhat = rep(NA,np), ess_bulk= rep(NA,np), ess_tail= rep(NA,np),
                reals = c(data$q1,data$kw, data$kc,data$bw,data$bc, data$kappa),
-               div = rep(NA,6), index = index))
+               div = rep(NA,np), index = index))
   }
   
   

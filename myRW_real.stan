@@ -5,6 +5,8 @@ data {
   matrix[nTrials, nSubject] painRating; // observations
   matrix[nTrials, nSubject] expectPain; // observations
   matrix[nTrials, nSubject] noxInput; // observations
+  matrix[nTrials, nSubject] cues; // observations
+  
 }
 
 parameters {
@@ -33,13 +35,36 @@ transformed parameters {
     expectMu[1, s] = 0.5;
       
     for (t in 1:nTrials){
-      painMu[t,s] = (1-yParam[s]) * noxInput[t,s] + yParam[s] * expectMu[t,s];
+     if(yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s] == 0){
+        painMu[t,s] = 0.01;
+      }else if (yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s] == 1){
+        painMu[t,s] = 0.99;}else{
+          painMu[t,s] = yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s];
+        }
       
       predErr[t,s] = painMu[t,s] - expectMu[t,s];
 
       expectMu[t+1,s] = expectMu[t,s] + alphaCoefI[s] * predErr[t,s] ;
     }
   }
+  
+  
+  
+      pred[i] = rbinom(1,1,expectation[i])
+    exp[i] = ifelse(cue[i] == 1, expectation[i], 1-expectation[i])
+    
+    perceptmu[i] = 
+    
+    percept[i] = extraDistr::rprop(1,100,perceptmu[i])
+    
+    percept_bin[i] = rbernoulli(1,perceptmu[i])
+    
+    pe[i] = ifelse(cue[i] == 1, (perceptmu[i] -exp[i]),(-(perceptmu[i] -exp[i])))  
+    
+    expectation[i+1] = expectation[i]+alpha*pe[i]
+    
+  
+  
 
 }
 model {

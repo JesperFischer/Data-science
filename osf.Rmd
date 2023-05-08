@@ -206,15 +206,20 @@ geom_point(aes(x = x, y = u), col = "blue")+geom_line(aes(x = x, y = desired))+f
 
 
 
-dd %>% ggplot(aes(as.factor(stim), y = percept))+geom_boxplot()+facet_grid(alpha~w1)
+dd %>% ggplot(aes(as.factor(stim), y = percept))+geom_boxplot()+facet_grid(alpha~w1, labeller = label_both)
 
 
 
 
-dd %>% ggplot(aes(percept, y = exp))+geom_point(aes(col = as.factor(cue)))+geom_smooth(aes(col = as.factor(cue)),method = "lm")+facet_grid(w1~alpha)
+dd %>% filter(stim == 1) %>% ggplot(aes(percept, y = exp))+geom_point(aes(col = as.factor(cue)))+geom_smooth(aes(col = as.factor(cue)),method = "lm")+facet_grid(alpha~w1, labeller = label_both)
 
 dd %>% ggplot(aes(as.factor(pred), y = percept, col = as.factor(stim)))+geom_boxplot()+facet_grid(w1~alpha)
 
+
+
+
+
+dd %>% ggplot(aes(exp, y = percept))+geom_point(aes(col = as.factor(stim)))+geom_smooth(aes(col = as.factor(stim)),method = "lm")+facet_grid(alpha~w1, labeller = label_both)
 
 
 

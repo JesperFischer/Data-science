@@ -9,7 +9,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-pacman::p_load(brms, tidyverse, here, cmdstanr, loo, extraDistr, tidybayes, furrr,bayesplot, patchwork, progressr, R.utils)
+pacman::p_load(brms, tidyverse, here, cmdstanr, loo, extraDistr, tidybayes, furrr,bayesplot, patchwork, progressr, R.utils, scales)
 
 source(here::here("concise","realstuf","scripts","Gen-power.R"))
 source(here::here("concise","realstuf","scripts","stan_helpers.R"))
@@ -97,6 +97,8 @@ mcmc_pairs(posterior_cp, np = np_cp, pars = c("q1","n","m", "kappa"),
 ```{r parameter recovery for the simplest model, fig.width=8, fig.height=8}
 source(here::here("concise","realstuf","scripts","Gen-power.R"))
 source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
+
 m = 1
 n = 1
 q1 = seq(20,80,by = 0.1)
@@ -199,7 +201,7 @@ q1 = seq(20,80,by = 10)
 q2 = q1
 kw = seq(0.5,2,by = 0.7)
 kc = seq(0.5,2,by = 0.7)
-kappa = c(10,100,1000)
+kappa = c(1000)
 autocor = TRUE
 bw = seq(0,1,by = 0.3)
 bc = seq(0,1,by = 0.3)
@@ -216,7 +218,7 @@ parameters$id = 1:nrow(parameters)
 
 data_list <- split(parameters, parameters$id)
 
-plan(multisession, workers = 2)
+plan(multisession, workers = 5)
 
 #qq = model_comparison(tgis,model1,model2, brms = TRUE)
 
@@ -227,9 +229,10 @@ parameterrecover = map_dfr(results, bind_rows)
 
 parameterrecover %>%filter(div ==0) %>%  ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
 
-#get_pr_plot(parameterrecover)
-save.image("~/TGI-comp/concise/realstuf/parameterrecovery/real_diamond_auto(q,kw,kc,bw,bc).RData")
-rm(list = ls())
+get_pr_plot(parameterrecover)
+
+#save.image("~/TGI-comp/concise/realstuf/parameterrecovery/real_diamond_auto(q,kw,kc,bw,bc).RData")
+#rm(list = ls())
 ```
 
 
@@ -273,25 +276,26 @@ results <- future_map(data_list, ~do_parameterrecover4(.x), .progress = TRUE)
 parameterrecover = map_dfr(results, bind_rows)
 
 parameterrecover %>% mutate(color = as.factor(ifelse(div != 0, "red","black"))) %>% ggplot(aes(x = mean, y = reals, col = color))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")+scale_color_manual(values = c("black","red"))
-black
 
 get_pr_plot(parameterrecover)
 
-save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m).RData")
-rm(list = ls())
+#save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m).RData")
+#rm(list = ls())
 ```
 
 ```{r parameter recovery for the powerlaw with fixed k and with auto on thermo, fig.width=8, fig.height=8}
 #run again
 source(here::here("concise","realstuf","scripts","Gen-power.R"))
 source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
+
 m = seq(0.5,2,by = 0.5)
 n = seq(0.5,2,by = 0.5)
 q1 = seq(20,80,20)
 q2 = q1
 kw = 1
 kc = 1
-kappa = c(10,100,1000)
+kappa = c(1000)
 autocor = TRUE
 bw = seq(0,0.9,by = 0.3)
 bc = seq(0,0.9,by = 0.3)
@@ -307,34 +311,22 @@ parameters$id = 1:nrow(parameters)
 
 data_list <- split(parameters, parameters$id)
 
-#plan(multisession, workers = 10)
+#plan(multisession, workers = 5)
 
 #qq = model_comparison(tgis,model1,model2, brms = TRUE)
 
 results <- future_map(data_list, ~do_parameterrecover5(.x), .progress = TRUE)
 
-my_pkg_fn <- function(x) {
-  p <- progressor(steps = length(x))
-  
-  future_map(x, ~{
-    p()
-    Sys.sleep(.2)
-    do_parameterrecover5(.x)
-  })
-}
-
-with_progress({
-  result <- my_pkg_fn(data_list)
-})
 
 # Split the first element of the resulting list into a separate data frame
 parameterrecover = map_dfr(results, bind_rows)
 
 parameterrecover %>% filter(div < 1) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
 
+get_pr_plot(parameterrecover)
 
 save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc).RData")
-rm(list = ls())
+#rm(list = ls())
 ```
 
 
@@ -343,6 +335,7 @@ rm(list = ls())
 
 source(here::here("concise","realstuf","scripts","Gen-power.R"))
 source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+source(here::here("concise","realstuf","scripts","plotter.R"))
 m = seq(0.5,1.5,by = 0.5)
 n = seq(0.5,1.5,by = 0.5)
 q1 = seq(20,60,20)

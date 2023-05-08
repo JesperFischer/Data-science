@@ -13,11 +13,13 @@ get_pr_plot = function(parameterrecover){
       filter(!str_detect(variable, "kappa")) %>% 
       ggplot(aes(x = mean, y = reals))+
       geom_point()+
-      facet_wrap(~variable, scales = "free", nrow = 1)+theme_classic()+geom_abline(slope = 1, intercept = 0)
+      facet_wrap(~variable, scales = "free", nrow = 1)+theme_classic()+
+      geom_abline(slope = 1, intercept = 0)+
+      scale_y_continuous(breaks=pretty_breaks(n = 4), labels = comma)+scale_x_continuous(breaks=pretty_breaks(n = 4), labels = comma)
     
     
-    kappa = ggplot(data.frame(),aes())+geom_histogram(aes(y = rprop(10000, i, 0.5)))+theme_classic()+ylab(" ")+xlab(" ")+
-      scale_y_continuous(breaks = seq(0,1,by = 0.1), labels  = seq(0,1,by = 0.1))
+    kappa = ggplot(data.frame(y = rprop(10000, i, 0.5)),aes(y = y))+geom_histogram()+theme_classic()+ylab(" ")+xlab(" ")+
+      scale_y_continuous(breaks=pretty_breaks(n = 4), labels = comma)+scale_x_continuous(breaks=pretty_breaks(n = 4), labels = comma)
     
     layout <- c(
       area(1, 1,1,3),
@@ -28,12 +30,14 @@ get_pr_plot = function(parameterrecover){
     p = pr + kappa + plot_layout(design = layout)
     
     row_plots[[q]] = p
-  }
+    
+    }
+  
+  plots_list <- lapply(row_plots, function(p) p)
+  
   
   plot = wrap_plots(
-    row_plots[[1]],
-    row_plots[[2]],
-    row_plots[[3]],
+    plots_list,
     nrow = length(row_plots),
     byrow = TRUE
   )
