@@ -153,7 +153,6 @@ do_parameterrecover3 = function(data){
   
 }
 
-
 do_parameterrecover4 = function(data){
   index = rnorm(1,-1000,1000)
   
@@ -184,15 +183,49 @@ do_parameterrecover4 = function(data){
   model = here::here("concise","realstuf","stan","powerlaw_fixed_k.stan")
   mod = cmdstan_model(model)
   
-  fit <- mod$sample(
-    data = data1, 
-    seed = 123, 
-    chains = 4, 
-    parallel_chains = 1,
-    refresh = 500
-  )
   
-  return(data.frame(fit$summary(c("q1","m","n","kappa")), reals = c(data$q1,data$m, data$n, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+  fitter = function(){
+    fit <- mod$sample(
+      data = data1,
+      chains = 4, 
+      parallel_chains = 4,
+      refresh = 500
+    )
+    return(fit)
+  }
+  
+  
+  fit <- tryCatch({
+    fit = withTimeout(fitter(), timeout = 600, cpu=600)
+  }, error = function(e) {
+    print("An error occurred!")
+    return(NA)
+  })
+  
+  if(is.environment(fit)){
+    parameters = c("q1","m","n","kappa")
+    np = length(parameters)
+    return(data.frame(fit$summary(c("q1","m","n","kappa")), reals = c(data$q1,data$m, data$n, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+    
+  }else{
+    parameters = c("q1","m","n","kappa")
+    np = length(parameters)
+    return(data.frame(variable = parameters, 
+                      mean = rep(NA,np),
+                      median = rep(NA,np), 
+                      sd = rep(NA,np), 
+                      q5 = rep(NA,np), 
+                      q95 = rep(NA,np), rhat = rep(NA,np), ess_bulk= rep(NA,np), ess_tail= rep(NA,np),
+                      reals = c(data$q1,data$m, data$n, data$kappa),
+                      div = rep(NA,np), index = index))
+  }
+  
+  
+  
+  
+  
+  
+  
 }
 
 
@@ -310,17 +343,121 @@ do_parameterrecover7 = function(data){
   model = here::here("concise","realstuf","stan","full_power(sameq).stan")
   mod = cmdstan_model(model)
   
-  fit <- mod$sample(
-    data = data1, 
-    seed = 123, 
-    chains = 4, 
-    parallel_chains = 4,
-    refresh = 500
-  )
   
-  return(data.frame(fit$summary(c("q1","m","n","bw","bc","bp","kc","kw","kappa")), reals = c(data$q1,data$m, data$n,data$bw,data$bc,data$bp,data$kc,data$kw, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+  fitter = function(){
+    fit <- mod$sample(
+      data = data1,
+      chains = 4, 
+      parallel_chains = 4,
+      refresh = 500
+    )
+    return(fit)
+  }
+  
+  
+  fit <- tryCatch({
+    fit = withTimeout(fitter(), timeout = 600, cpu=600)
+  }, error = function(e) {
+    print("An error occurred!")
+    return(NA)
+  })
+  
+  if(is.environment(fit)){
+    parameters = c("q1","m","n","bw","bc","bp","kc","kw","kappa")
+    np = length(parameters)
+    return(data.frame(fit$summary(c("q1","m","n","bw","bc","bp","kc","kw","kappa")), reals = c(data$q1,data$m, data$n,data$bw,data$bc,data$bp,data$kc,data$kw, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+  }else{
+    parameters = c("q1","m","n","bw","bc","bp","kc","kw","kappa")
+    np = length(parameters)
+    return(data.frame(variable = parameters, 
+                      mean = rep(NA,np),
+                      median = rep(NA,np), 
+                      sd = rep(NA,np), 
+                      q5 = rep(NA,np), 
+                      q95 = rep(NA,np), rhat = rep(NA,np), ess_bulk= rep(NA,np), ess_tail= rep(NA,np),
+                      reals = c(data$q1,data$m, data$n,data$bw,data$bc,data$bp,data$kc,data$kw, data$kappa),
+                      div = rep(NA,np), index = index))
+  }
+  
+  
+  
+  
+  
 }
 
+
+
+do_parameterrecover8 = function(data){
+  index = rnorm(1,-1000,1000)
+  
+  df = poweragent_gen(m = data$m,
+                      n = data$n,
+                      q1 = data$q1,
+                      q2 = data$q2,
+                      kw = data$kw,
+                      kc = data$kc,
+                      kappa = data$kappa,
+                      autocor = data$autocor,
+                      bw = data$bw,
+                      bc = data$bc,
+                      bp = data$bp,
+                      dist = data$dist)
+  
+  
+  data1 = list(Tw1 = df$Tw1,
+               Tw2 = df$Tw2,
+               Tc1 = df$Tc1,
+               Tc2 = df$Tc2, 
+               N = nrow(df), 
+               w = df$warm, 
+               c = df$cold, 
+               p = df$pain,
+               dist = dist)
+  
+  model = here::here("concise","realstuf","stan","full_power(sameq)_fix_bp.stan")
+  mod = cmdstan_model(model)
+  
+  
+  fitter = function(){
+    fit <- mod$sample(
+      data = data1,
+      chains = 4, 
+      parallel_chains = 4,
+      refresh = 500
+    )
+    return(fit)
+  }
+  
+  
+  fit <- tryCatch({
+    fit = withTimeout(fitter(), timeout = 600, cpu=600)
+  }, error = function(e) {
+    print("An error occurred!")
+    return(NA)
+  })
+  
+  if(is.environment(fit)){
+    parameters = c("q1","m","n","bw","bc","bp","kc","kw","kappa")
+    np = length(parameters)
+    return(data.frame(fit$summary(c("q1","m","n","bw","bc","bp","kc","kw","kappa")), reals = c(data$q1,data$m, data$n,data$bw,data$bc,data$bp,data$kc,data$kw, data$kappa), div = sum(fit$diagnostic_summary()$num_divergent),index = index))
+  }else{
+    parameters = c("q1","m","n","bw","bc","bp","kc","kw","kappa")
+    np = length(parameters)
+    return(data.frame(variable = parameters, 
+                      mean = rep(NA,np),
+                      median = rep(NA,np), 
+                      sd = rep(NA,np), 
+                      q5 = rep(NA,np), 
+                      q95 = rep(NA,np), rhat = rep(NA,np), ess_bulk= rep(NA,np), ess_tail= rep(NA,np),
+                      reals = c(data$q1,data$m, data$n,data$bw,data$bc,data$bp,data$kc,data$kw, data$kappa),
+                      div = rep(NA,np), index = index))
+  }
+  
+  
+  
+  
+  
+}
 
 
 

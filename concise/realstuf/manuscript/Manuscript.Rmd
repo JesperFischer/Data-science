@@ -218,7 +218,7 @@ parameters$id = 1:nrow(parameters)
 
 data_list <- split(parameters, parameters$id)
 
-plan(multisession, workers = 5)
+plan(multisession, workers = 10)
 
 #qq = model_comparison(tgis,model1,model2, brms = TRUE)
 
@@ -375,19 +375,68 @@ rm(list = ls())
 
 ```
 
+```{r parameter recovery for full model with bp}
+
+source(here::here("concise","realstuf","scripts","Gen-power.R"))
+source(here::here("concise","realstuf","scripts","stan_helpers.R"))
+m = seq(0.5,1.5,by = 0.5)
+n = seq(0.5,1.5,by = 0.5)
+q1 = seq(20,80,20)
+q2 = q1
+kw = seq(0.5,2,by = 1)
+kc = seq(0.5,2,by = 1)
+kappa = c(10,100,1000)
+autocor = TRUE
+bw = seq(0.1,0.6,by = 0.3)
+bc = seq(0.1,0.6,by = 0.3)
+bp = 0
+dist = TRUE # FALSE= Gaussian, TRUE = Beta
+
+parameters = expand_grid(m,n,q1,q2,kw,kc,kappa,autocor,bw,bc,bp,dist)
+
+parameters = parameters[parameters$q1 == parameters$q2, ]
+
+
+parameters$id = 1:nrow(parameters)
+
+data_list <- split(parameters, parameters$id)
+
+plan(multisession, workers = 10)
+
+#qq = model_comparison(tgis,model1,model2, brms = TRUE)
+
+results <- future_map(data_list, ~do_parameterrecover8(.x), .progress = TRUE)
+
+# Split the first element of the resulting list into a separate data frame
+parameterrecover = map_dfr(results, bind_rows)
+
+parameterrecover %>% filter(div == 0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+get_pr_plot(parameterrecover)
+
+
+save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc,bp,kw,kc).RData")
+rm(list = ls())
+
+```
+
+
+
+
 
 
 ```{r parameter recovery for the full power(sameq), fig.width=8, fig.height=8}
 
 source(here::here("concise","realstuf","scripts","Gen-power.R"))
 source(here::here("concise","realstuf","scripts","stan_helpers.R"))
-m = seq(0,1.5,by = 0.5)
-n = seq(0,1.5,by = 0.5)
-q1 = seq(20,60,20)
+m = seq(0.5,1.5,by = 0.5)
+n = seq(0.5,1.5,by = 0.5)
+q1 = seq(20,80,20)
 q2 = q1
 kw = seq(0.5,2,by = 1)
 kc = seq(0.5,2,by = 1)
-kappa = c(10,100,1000)
+kappa = c(10)
 autocor = TRUE
 bw = seq(0.1,0.6,by = 0.3)
 bc = seq(0.1,0.6,by = 0.3)
@@ -412,13 +461,19 @@ results <- future_map(data_list, ~do_parameterrecover7(.x), .progress = TRUE)
 # Split the first element of the resulting list into a separate data frame
 parameterrecover = map_dfr(results, bind_rows)
 
-#parameterrecover %>% filter(div == 0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+parameterrecover %>% filter(div == 0) %>% ggplot(aes(x = mean, y = reals))+geom_point()+facet_wrap(~variable, scales = "free")+theme_classic()+geom_abline(slope = 1, intercept = 0)+geom_smooth(method = "lm")
+
+
+get_pr_plot(parameterrecover)
 
 
 save.image("~/TGI-comp/concise/realstuf/parameterrecovery/powerlaw_auto(q,n,m,bw,bc,bp,kw,kc).RData")
 rm(list = ls())
 
 ```
+
+
+
 
 
 ```{r model recovery}
@@ -429,12 +484,11 @@ source(here::here("concise","realstuf","scripts","model_recovery.R"))
 
 m = 1
 n = 1
-q1 = 40
-q1 = seq(20,60,5)
+q1 = seq(20,80,1)
 q2 = q1
 kw = 1
 kc = 1
-kappa = 50
+kappa = 100
 autocor = FALSE
 bw = 0
 bc = 0
@@ -453,27 +507,27 @@ data_list <- split(parameters, parameters$id)
 
 #plan(multisession, workers = 60)
 
-plan(multisession, workers = 4)
+plan(multisession, workers = 10)
 
 results <- future_map(data_list, ~model_fitter(.x), .progress = TRUE)
+ 
 
 
-model_fitter(data_list[[1]])
+data = map_dfr(results, 1)
+
+epld = map_dfr(results, 2)
 
 modelstack = map_dfr(results, 3)
 
 
-which.max(modelstack[7,])
+which.max(modelstack[,1])
 
 
-modelcom = f[[2]]
 
-f = f[[1]]
-highest_mean_row <- f[which.min(f$means), ]
+highest_mean_row <- data[which.min(data$means), ]
 
-f %>% ggplot(aes(x = names))+theme_classic()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+data %>% ggplot(aes(x = names))+theme_classic()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   geom_pointrange(aes(x = names, y = means, ymin = means-sds, ymax = means+sds))+
-    geom_pointrange(data = highest_mean_row, aes(x = names, y = means, ymin = means - sds, ymax = means + sds), color = "red") +
   labs(x = "Names", y = "Mean Value")
 
 ```
