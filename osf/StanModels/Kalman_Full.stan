@@ -53,6 +53,7 @@ transformed parameters {
       expectMu[cueIndexVec[t,s],s] = (stretchMyBeta[s] * (sigmaEpsilon + sigmaPsi[s]) * expectMu[t,s] + (stretchMyBeta[s] * expectVar[t,s] * noxInput[t,s]) + 
                                       ((1 - stretchMyBeta[s]) * (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s]) * sortedInitExp[allCues[t,s],s] )) / 
                                       (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s]) ;
+                                      
       expectVar[cueIndexVec[t,s],s] = (stretchMyBeta[s] * (sigmaEpsilon + sigmaPsi[s]) * expectVar[t,s] / 
                                        (sigmaEpsilon + sigmaPsi[s] + expectVar[t,s])) + sigmaEta[s];
     }

@@ -246,7 +246,7 @@ sd_precision_percept = seq(0.5,0.5,50)
 mu_beta = seq(log(50),log(50),20)
 sd_beta = seq(0.5,0.5,20)
 
-nsubs = 5
+nsubs = 10
 
 parameters = expand.grid(mu_alpha = mu_alpha,
                          kappa_alpha = kappa_alpha,
@@ -329,5 +329,8 @@ ppu_sub(fit = fit,
         reals = df,
         lim = 1
         )
+
+
+
 ```
 

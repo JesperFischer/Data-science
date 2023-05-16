@@ -123,7 +123,7 @@ ppu_sub = function(fit,parameter,reals, lim = 10){
   df %>% pivot_longer(cols = post_parameters) %>% 
     ggplot(aes(x = value, fill = posterior))+
     geom_histogram(alpha = 0.5, position="identity")+
-    facet_wrap(~name, nrow = length(parameters), ncol = 10, scales = "free")+
+    facet_wrap(~name, nrow = length(parameters)/2, ncol = 5, scales = "free")+
     geom_vline(data = reals %>% mutate(name = paste0(parameter,"[", row_number(), "]")), aes(xintercept = mean))+
     theme_classic()+
     scale_x_continuous(limits = c(0,lim), breaks = scales::pretty_breaks(n = 5))

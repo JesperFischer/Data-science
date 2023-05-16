@@ -161,15 +161,18 @@ our_rw_agent_v2 = function(w1,alpha,precision_percept,beta){
 
 
 our_hier_rw_agent = function(parameters){
+  
   nsubs = parameters$nsubs
   
   df = data.frame()
   for (s in 1:nsubs){
+    
     df1 = our_rw_agent_v2(w1 = extraDistr::rprop(1,parameters$kappa_w1,parameters$mu_w1),
                  alpha = extraDistr::rprop(1,parameters$kappa_alpha,parameters$mu_alpha),
                  precision_percept = rlnorm(1,parameters$mu_precision_percept,parameters$sd_precision_percept),
                  beta = rlnorm(1,parameters$mu_beta,parameters$sd_beta)
                  )
+    
     df = rbind(df,df1)
     
   }
@@ -186,4 +189,68 @@ our_hier_rw_agent = function(parameters){
 
 
 
-
+our_kalman_agent = function(parameters){
+  
+  dd = get_experiment()
+  
+  cue = dd$cue
+  stim = dd$stim
+  u = dd$u
+  bias = dd$bias
+  
+  
+  
+  ntrials = nrow(dd)
+  
+  percept = array(NA, ntrials)
+  perceptmu = array(NA, ntrials)
+  perceptvar = array(NA, ntrials)
+  perceptprec = array(NA,ntrials)
+  
+  
+  
+  exp_mu = array(NA, ntrials)
+  exp_var = array(NA, ntrials)
+  exp_prec = array(NA, ntrials)  
+  
+  association = array(NA, ntrials)
+  pred = array(NA,ntrials)
+  pe = array(NA,ntrials)
+  percept_bin = array(NA,ntrials)
+  
+  association[1] = 0.5
+  exp_var[1] = 2
+  
+  sigmaEta = 2
+  sigmaEpsilon = 2
+  sigmaPsi = 2  
+  
+  for(t in 1:ntrials){
+    exp_prec[t] = 1/exp_var[t]
+    
+    pred[t] = rbinom(1,1,(exp_mu[t]^exp_prec[t])/((exp_mu[t]^exp_prec[t])+(1-exp_mu[t])^(exp_prec[t])))
+    
+    exp_mu[t] = ifelse(cue[t] == 1, association[t], 1-association[t])
+    
+    
+    perceptmu[t] =  (sigmaEpsilon * exp_mu[t] + (sigmaPsi + exp_var[t]) * stim[t] ) / 
+      (sigmaEpsilon + sigmaPsi + exp_var[t]);
+    
+    perceptvar[t] = ( sigmaEpsilon * (sigmaPsi + exp_var[t]) ) / (sigmaEpsilon + sigmaPsi + exp_var[t])
+    
+    perceptprec[t]= 1/perceptvar[t]
+    
+    percept[i] = extraDistr::rprop(1,perceptprec[t],perceptmu[t])
+    
+    exp_mu[t+1] <- ((sigmaEpsilon + sigmaPsi) * exp_mu[t] + (exp_var[t] * stim[t])) / 
+      (sigmaEpsilon + sigmaPsi + exp_var[t])
+    
+    
+    exp_var[t] <- ((sigmaEpsilon + sigmaPsi) * exp_var[t] / (sigmaEpsilon + sigmaPsi + exp_var[t])) + sigmaEta
+    
+  }
+  
+  
+  
+  
+}
