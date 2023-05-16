@@ -1,45 +1,48 @@
+
+
+
 data {
 
-  int<lower=1> nSubject; // number of subjects
-  int<lower=1> nTrials; // number of subjects
-  matrix[nTrials, nSubject] painRating; // observations
-  int expectPain[nTrials, nSubject]; // prediciton
-  int pain[nTrials, nSubject]; // prediciton
+  int<lower=1> nsubs; // number of subjects
+  int<lower=1> ntrials; // number of subjects
+  matrix[ntrials, nsubs] percept; // observations
+  int expectPain[ntrials, nsubs]; // prediciton
+  int percept_bin[ntrials, nsubs]; // prediciton
   
-  matrix[nTrials, nSubject] noxInput; // observations
-  matrix[nTrials, nSubject] cues; // observations
+  matrix[ntrials, nsubs] stim; // observations
+  matrix[ntrials, nsubs] cues; // observations
   
 }
 
 parameters {
-  vector<lower=0,upper=1>[nSubject] alphaCoefI;
-  vector<lower=0>[nSubject] painError;
-  vector<lower=0>[nSubject] beta;
+  vector<lower=0,upper=1>[nsubs] alpha;
+  vector<lower=0>[nsubs] precision_percept;
+  vector<lower=0>[nsubs] beta;
   
-  vector<lower=0, upper=1>[nSubject] yParam;
+  vector<lower=0, upper=1>[nsubs] w1;
 
   // Group-level parameters
-  real <lower=0> alphaI;
-  real <lower=0, upper  = 1> betaI;
-  real <lower=0, upper = 1> betaY;
-  real <lower=0> alphaY;
+  real <lower=0> kappa_alpha;
+  real <lower=0, upper  = 1> mu_alpha;
+  real <lower=0, upper = 1> mu_w1;
+  real <lower=0> kappa_w1;
  // Group-level parameters
-  real <lower=0> betaScale;
-  real <lower=0> painScale;
+  real <lower=0> sd_beta;
+  real <lower=0> sd_precision_percept;
 }
 
 transformed parameters {
-  matrix <lower=0, upper  = 1> [nTrials, nSubject] painMu; 
-  matrix <lower=0, upper  = 1> [nTrials+1, nSubject] association; 
-  matrix <lower=0, upper  = 1> [nTrials+1, nSubject] expectMu;
-  matrix[nTrials, nSubject] predErr;
+  matrix <lower=0, upper  = 1> [ntrials, nsubs] painMu; 
+  matrix <lower=0, upper  = 1> [ntrials+1, nsubs] association; 
+  matrix <lower=0, upper  = 1> [ntrials+1, nsubs] expectMu;
+  matrix[ntrials, nsubs] predErr;
 
 
-  for (s in 1:nSubject) {
+  for (s in 1:nsubs) {
     association[1, s] = 0.5;
     expectMu[161, s] = 0.5;
       
-    for (t in 1:nTrials){
+    for (t in 1:ntrials){
       
       
       if(cues[t,s] == 1){
@@ -48,16 +51,14 @@ transformed parameters {
         expectMu[t,s] = 1-association[t,s];
       }
 
-      
-      
-       if(yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s] == 0){
-          painMu[t,s] = 0.01;
-        }else if (yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s] == 1){
-          painMu[t,s] = 0.99;
-        }else{
-          painMu[t,s] = yParam[s]*noxInput[t,s]+(1-yParam[s])*expectMu[t,s];
-          }
-      
+     if(w1[s]*stim[t,s]+(1-w1[s])*expectMu[t,s] == 0){
+        painMu[t,s] = 0.01;
+      }else if (w1[s]*stim[t,s]+(1-w1[s])*expectMu[t,s] == 1){
+        painMu[t,s] = 0.99;
+      }else{
+        painMu[t,s] = w1[s]*stim[t,s]+(1-w1[s])*expectMu[t,s];
+        }
+    
       
       if(cues[t,s] == 1){
         predErr[t,s] = (painMu[t,s] - expectMu[t,s]);
@@ -66,69 +67,153 @@ transformed parameters {
       }
       
       
-      association[t+1,s] = association[t,s] + alphaCoefI[s] * predErr[t,s];
-    
-    
+      association[t+1,s] = association[t,s] + alpha[s] * predErr[t,s];
     
     }
   }
-  
-  
-
 }
-model {
-  for (s in 1:nSubject){
 
-    for (t in 1:nTrials){
-      target += beta_proportion_lpdf(painRating[t,s] | painMu[t,s], 1/painError[s]);
+
+model {
+  for (s in 1:nsubs){
+
+    for (t in 1:ntrials){
+      target += beta_proportion_lpdf(percept[t,s] | painMu[t,s], precision_percept[s]);
       
-      target += bernoulli_lpmf(pain[t,s] | (painMu[t,s]^beta[s])/((painMu[t,s]^beta[s])+(1-painMu[t,s])^(beta[s])));
+      target += bernoulli_lpmf(percept_bin[t,s] | (painMu[t,s]^beta[s])/((painMu[t,s]^beta[s])+(1-painMu[t,s])^(beta[s])));
 
       target += bernoulli_lpmf(expectPain[t,s] |  (expectMu[t,s]^beta[s])/((expectMu[t,s]^beta[s])+(1-expectMu[t,s])^(beta[s])));
       
     }
     
-    target += beta_proportion_lpdf(alphaCoefI[s] | betaI , alphaI);
-    target += beta_proportion_lpdf(yParam[s] | betaY , alphaY);
+    target += beta_proportion_lpdf(alpha[s] | mu_alpha , kappa_alpha);
+    target += beta_proportion_lpdf(w1[s] | mu_w1 , kappa_w1);
 
-    target += lognormal_lpdf(painError[s] | 0, painScale);
-    target += lognormal_lpdf(beta[s] | 0, betaScale);
+    target += lognormal_lpdf(precision_percept[s] | 0, sd_precision_percept);
+    target += lognormal_lpdf(beta[s] | 0, sd_beta);
     
   }
   
   // Hierarchical Priors
-  target += lognormal_lpdf(alphaI | 0.3 , 1); 
-  target += beta_proportion_lpdf(betaI | 0.1 , 10) ; 
-  target += beta_proportion_lpdf(betaY | 0.1 , 10) ; 
-  target += lognormal_lpdf(alphaY | 0.3 , 1);
+  target += beta_proportion_lpdf(mu_alpha | 0.1 , 10) ; 
+  target += lognormal_lpdf(kappa_alpha | 0.3 , 1); 
   
-  target += lognormal_lpdf(painScale | -2 , 0.5);
-  target += lognormal_lpdf(betaScale | 0 , 1);
+  target += beta_proportion_lpdf(mu_w1 | 0.1 , 10) ; 
+  target += lognormal_lpdf(kappa_w1 | 0.3 , 1);
+  
+  target += lognormal_lpdf(sd_precision_percept | 0 , 0.5);
+  target += lognormal_lpdf(sd_beta | 0 , 1);
 }
 
 generated quantities{
-  real prior_painScale;
-  real prior_betaScale;
-  real prior_betaI;
-  real prior_betaY;
-  real prior_alphaCoefI[nSubject];
-  real prior_painError[nSubject];
-  real prior_yParam[nSubject];
+  real prior_sd_precision_percept;
+  real prior_sd_beta;
   
-  for (s in 1:nSubject){
-    prior_alphaCoefI[s] = beta_proportion_rng(betaI , alphaI);
-    prior_yParam[s] = beta_proportion_rng(betaY , alphaY);
+  real prior_kappa_alpha;
+  real prior_mu_alpha;
+  
+  real prior_mu_w1;
+  real prior_kappa_w1;
+  
+  //subject level
+  
+  real prior_alpha[nsubs];
+  real prior_precision_percept[nsubs];
+  real prior_beta[nsubs];
+  real prior_w1[nsubs];
+  
+  //trial level:
+  matrix <lower=0, upper  = 1> [ntrials, nsubs] prior_painMu; 
+  matrix <lower=0, upper  = 1> [ntrials+1, nsubs] prior_association; 
+  matrix <lower=0, upper  = 1> [ntrials+1, nsubs] prior_expectMu;
+  matrix[ntrials, nsubs] prior_predErr;
+  
+  matrix[ntrials, nsubs] prior_percept;
+  matrix[ntrials, nsubs] prior_percept_bin;  
+  matrix[ntrials, nsubs] prior_expectPain;
+  
+  matrix[ntrials, nsubs] post_percept;
+  matrix[ntrials, nsubs] post_percept_bin;  
+  matrix[ntrials, nsubs] post_expectPain;
+  
+  
+  matrix[ntrials, nsubs] log_lik;
+
+  
+  prior_mu_w1 = beta_proportion_rng(0.1,10);
+  prior_kappa_w1 = lognormal_rng(0.3,1);
+  
+  prior_mu_alpha = beta_proportion_rng(0.1,10);
+  prior_kappa_alpha = lognormal_rng(0.3,1);
+  
+  prior_sd_precision_percept = lognormal_rng(0,0.5);
+  prior_sd_beta = lognormal_rng(0,1);
+  
+  
+  
+  for (s in 1:nsubs){
+    prior_alpha[s] = beta_proportion_rng(prior_mu_alpha , prior_kappa_alpha);
+    prior_w1[s] = beta_proportion_rng(prior_mu_w1 , prior_kappa_w1);
+    
+    prior_precision_percept[s] = lognormal_rng(0, prior_sd_precision_percept);
+    prior_beta[s] = lognormal_rng(0, prior_sd_beta);
+    
+
+    prior_association[1, s] = 0.5;
+    prior_expectMu[161, s] = 0.5;
+      
+    for (t in 1:ntrials){
+      
+      
+      if(cues[t,s] == 1){
+        prior_expectMu[t,s] = prior_association[t,s];
+      }else{
+        prior_expectMu[t,s] = 1-prior_association[t,s];
+      }
+
+      
+      
+       if(prior_w1[s]*stim[t,s]+(1-prior_w1[s])*prior_expectMu[t,s] == 0){
+          prior_painMu[t,s] = 0.01;
+        }else if (prior_w1[s]*stim[t,s]+(1-prior_w1[s])*prior_expectMu[t,s] == 1){
+          prior_painMu[t,s] = 0.99;
+        }else{
+          prior_painMu[t,s] = prior_w1[s]*stim[t,s]+(1-prior_w1[s])*prior_expectMu[t,s];
+          }
+      
+      
+      if(cues[t,s] == 1){
+        prior_predErr[t,s] = (prior_painMu[t,s] - prior_expectMu[t,s]);
+      }else{
+        prior_predErr[t,s] = -(prior_painMu[t,s] - prior_expectMu[t,s]);
+      }
+  
+      prior_association[t+1,s] = prior_association[t,s] + prior_alpha[s] * prior_predErr[t,s];
     
     
-    prior_painError[s] = lognormal_rng(0, painScale);
+      prior_percept[t,s] = beta_proportion_rng(prior_painMu[t,s], prior_precision_percept[s]);
+      
+      prior_percept_bin[t,s] = bernoulli_rng((prior_painMu[t,s]^prior_beta[s])/((prior_painMu[t,s]^prior_beta[s])+(1-prior_painMu[t,s])^(prior_beta[s])));
+
+      prior_expectPain[t,s] = bernoulli_rng((prior_expectMu[t,s]^prior_beta[s])/((prior_expectMu[t,s]^prior_beta[s])+(1-prior_expectMu[t,s])^(prior_beta[s])));
+      
+      
+      post_percept[t,s] = beta_proportion_rng(painMu[t,s], precision_percept[s]);
+      
+      post_percept_bin[t,s] = bernoulli_rng((painMu[t,s]^beta[s])/((painMu[t,s]^beta[s])+(1-painMu[t,s])^(beta[s])));
+
+      post_expectPain[t,s] = bernoulli_rng((expectMu[t,s]^beta[s])/((expectMu[t,s]^beta[s])+(1-expectMu[t,s])^(beta[s])));
+      
+      
+      log_lik[t,s] = bernoulli_lpmf(percept_bin[t,s] | (painMu[t,s]^beta[s])/((painMu[t,s]^beta[s])+(1-painMu[t,s])^(beta[s])))+
+                     beta_proportion_lpdf(percept[t,s] | painMu[t,s], precision_percept[s])+
+                     bernoulli_lpmf(expectPain[t,s] |  (expectMu[t,s]^beta[s])/((expectMu[t,s]^beta[s])+(1-expectMu[t,s])^(beta[s])));
+    
+    }
+  }   
+    
+    
+    
   }
-  
-  prior_betaI = beta_proportion_rng(0.1,10);
-  prior_betaY = beta_proportion_rng(0.1,10);
-  
-  prior_painScale = lognormal_rng(-2,0.5);
-  prior_betaScale = lognormal_rng(0,1);
-  
-  
-}
+
 

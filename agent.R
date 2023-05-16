@@ -148,7 +148,9 @@ our_rw_agent_v2 = function(w1,alpha,precision_percept,beta){
   df = data.frame(u = u[1:ntrials], stim = stim[1:ntrials], percept = percept[1:ntrials], pred = pred[1:ntrials],association = association[1:ntrials],
                   exp = exp[1:ntrials],pe = pe[1:ntrials],cue = cue[1:ntrials], alpha = alpha,
                   percept_bin = percept_bin[1:ntrials],
-                  w1 = w1,precision_percept = precision_percept,
+                  w1 = w1,
+                  precision_percept = precision_percept,
+                  beta = beta,
                   x = 1:ntrials, perceptmu = perceptmu[1:ntrials], desired = rep(bias,1), id = rnorm(1,0,1))
   
   return(df)
@@ -173,7 +175,7 @@ our_hier_rw_agent = function(parameters){
   }
   
   
-  return(df)
+  return(list(df, parameters))
   
   
   
