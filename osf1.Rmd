@@ -296,13 +296,15 @@ data1 = list(nsubs = length(unique(data$id)),
 
 mod = cmdstan_model(here::here("myRW_real.stan"))
 
+
 fit <- mod$sample(
       data = data1,
       chains = 4, 
       parallel_chains = 4,
       refresh = 100,
       adapt_delta = 0.80,
-      max_treedepth = 10
+      max_treedepth = 10,
+      init = initial_values
     )
 
 ```
@@ -576,7 +578,7 @@ ppcheck(fit,
 
 
 
-```{r}
+```{r fitting real data}
 df= read.csv(here::here("data","data_TPL_AC.csv")) %>% 
   rename_all(tolower) %>% 
   filter(trial != 0) %>% 
