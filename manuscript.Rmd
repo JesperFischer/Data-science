@@ -163,6 +163,7 @@ loo_RW = loo::loo(as.matrix(loglik))
 ```
 
 ```{r}
+
 sub = fit_rw$summary(variables = c("beta","alpha","w1","precision_percept"))
 
 sub$id <- as.factor(gsub(".*\\[(\\d+)\\].*", "\\1", sub$variable))
@@ -180,7 +181,11 @@ sub %>% filter(variable2 %in% c("beta","precision_percept")) %>% ggplot(aes(x = 
   geom_point()+
   coord_cartesian(ylim = c(0,20))
 
-lmer()
+
+sub %>% filter(variable2 %in% c("w1","alpha","beta","precision_percept")) %>% select(mean,variable2) %>% 
+  pivot_wider(names_from = variable2, values_from = mean) %>% 
+  unnest(cols = everything()) %>% 
+  ggplot(aes(x = alpha, y = precision_percept))+geom_point()
 
 
 #plot participant 1

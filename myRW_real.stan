@@ -97,8 +97,8 @@ model {
   target += beta_proportion_lpdf(mu_w1 | 0.3 , 3) ; 
   target += lognormal_lpdf(kappa_w1 | log(30) , 0.5);
   
-  target += exponential_lpdf(sd_precision_percept | 5);
-  target += exponential_lpdf(sd_beta | 5);
+  target += exponential_lpdf(sd_precision_percept | 1);
+  target += exponential_lpdf(sd_beta | 1);
 }
 
 generated quantities{
@@ -145,8 +145,8 @@ generated quantities{
       prior_mu_alpha = beta_proportion_rng(0.3,3);
       prior_kappa_alpha = lognormal_rng(log(30) , 0.5);
       
-      prior_sd_precision_percept = lognormal_rng(log(2),1);
-      prior_sd_beta = lognormal_rng(log(2),1);
+      prior_sd_precision_percept = exponential_rng(1);
+      prior_sd_beta = exponential_rng(1);
       
       
       
