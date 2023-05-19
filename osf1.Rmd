@@ -389,7 +389,7 @@ dd = furrr::future_map_dfr(data_list, ~our_kalman_agent(.x), .progress = TRUE, .
 
 #datatext = dd %>% group_by(alpha,w1) %>% summarize(sse = sum((exp- perceptmu)^2))
 
-dd %>% ggplot()+
+dd %>% filter(sigmaEta == 0.1) %>% ggplot()+
 geom_line(aes(x = trial, y = exp_mu))+
 
 geom_point(aes(x = trial, y = stim-0.1), col = "blue")+
